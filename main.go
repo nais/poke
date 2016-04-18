@@ -41,7 +41,7 @@ func main() {
 		fmt.Println("apparently its done, lets post payload")
 
 		for _, elem := range payloadElements {
-			fmt.Println("", res)
+			fmt.Println("", elem)
 		}
 
 		time.Sleep(5 * time.Second)
