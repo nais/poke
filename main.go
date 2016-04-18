@@ -3,74 +3,67 @@ package main
 import "fmt"
 import "net/http"
 import "time"
+import "strings"
 
 func main() {
 
-	for {
-		someCheck := Check{"someEndpoint", "http://localhost:5000", "production", "myapp"}
-		checks := []Check{someCheck}
+	someCheck := Check{"someEndpoint", "http://localhost:5000", "production", "myapp"}
+	someOtherCheck := Check{"someOtherEndpoint", "http://localhost:5000", "production", "someApp"}
+	someThirdCheck := Check{"someThirdEndpoint", "http://localhost:5000", "production", "appapp"}
+	checks := []Check{someCheck, someOtherCheck, someThirdCheck}
 
-		checksChannel := make(chan Check)
-		resultsChannel := make(chan Result)
+	checkCount := len(checks)
+	fmt.Printf("We have %d checks\n", checkCount)
 
-		go performCheck(checksChannel, resultsChannel)
+	checksChannel := make(chan Check)
+	resultsChannel := make(chan Result)
+	done := make(chan bool)
+	payloadElements := []string{}
 
-		for _, check := range checks {
-			checksChannel <- check
-		}
-
-		close(checksChannel)
-
-		payloadElements := []string{}
-
-		// loops until we have all the results back from performCheck
-		for {
+	go check(checksChannel, resultsChannel)
+	go func() {
+		timestamp := time.Now().Unix()
+		for i := 0; i < checkCount; i++ {
 			result := <-resultsChannel
 			check := *result.check
-			payloadElements = append(payloadElements, fmt.Sprintf("%d %s %s %s", result.status, check.endpoint, check.environment, check.application))
-			payloadElementsSize := len(payloadElements)
-			checksSize := len(checks)
-
-			if payloadElementsSize == checksSize {
-				fmt.Println("we've added the same amount of payloadelements as checks to perform, which means we're done...")
-				close(resultsChannel)
-				break
-			}
+			fmt.Println("Got result", result.status)
+			payloadElements = append(payloadElements, fmt.Sprintf("checker,environment=%s,application=%s,endpoint=%s value=%d %d", check.environment, check.application, check.endpoint, result.status, timestamp))
 		}
+		done <- true
+	}()
 
-		fmt.Println("apparently its done, lets post payload")
-
-		for _, elem := range payloadElements {
-			fmt.Println("", elem)
-		}
-
-		time.Sleep(5 * time.Second)
+	for _, check := range checks {
+		checksChannel <- check
 	}
+
+	<-done
+	fmt.Printf("Apparently we're done, posting payload\n%s\n", strings.Join(payloadElements, "\n"))
+
+	return
 }
 
-func performCheck(checks chan Check, results chan Result) {
+//func transformResults()
 
-	check := <-checks
+func check(checks <-chan Check, results chan<- Result) {
+	for check := range checks {
+		resp, err := http.Get(check.endpoint)
 
-	fmt.Println("Got a check!", check)
-	resp, err := http.Get(check.endpoint)
+		var resultCode int
 
-	var resultCode int
+		if err != nil {
+			resultCode = Unknown
+		}
 
-	if err != nil {
-		resultCode = Unknown
+		if resp.StatusCode == 200 {
+			resultCode = Ok
+		} else {
+			resultCode = Error
+		}
+
+		result := Result{resultCode, &check}
+		fmt.Println("done checking, posting result to channel")
+		results <- result
 	}
-
-	if resp.StatusCode == 200 {
-		resultCode = Ok
-	} else {
-		resultCode = Error
-	}
-
-	result := Result{resultCode, &check}
-	fmt.Println("got result", result)
-
-	results <- result
 }
 
 type Check struct {
