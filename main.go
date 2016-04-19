@@ -14,7 +14,6 @@ func main() {
 
 	checkCount := len(checks)
 	fmt.Printf("We have %d checks\n", checkCount)
-
 	checksChannel := make(chan Check)
 	resultsChannel := make(chan Result)
 	done := make(chan bool)
@@ -44,7 +43,7 @@ func main() {
 
 //func transformResults()
 
-func check(checks <-chan Check, results chan<- Result) {
+func check(checks <-chan Check, results chan <- Result) {
 	for check := range checks {
 		resp, err := http.Get(check.endpoint)
 
@@ -52,9 +51,7 @@ func check(checks <-chan Check, results chan<- Result) {
 
 		if err != nil {
 			resultCode = Unknown
-		}
-
-		if resp.StatusCode == 200 {
+		} else if resp.StatusCode == 200 {
 			resultCode = Ok
 		} else {
 			resultCode = Error
@@ -79,7 +76,7 @@ type Result struct {
 }
 
 const (
-	Ok      = 0
-	Error   = 1
+	Ok = 0
+	Error = 1
 	Unknown = -1
 )
