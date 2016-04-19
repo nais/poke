@@ -7,9 +7,9 @@ import "strings"
 
 func main() {
 
-	someCheck := Check{"someEndpoint", "http://localhost:5000", "production", "myapp"}
-	someOtherCheck := Check{"someOtherEndpoint", "http://localhost:5000", "production", "someApp"}
-	someThirdCheck := Check{"someThirdEndpoint", "http://localhost:5000", "production", "appapp"}
+	someCheck := Check{"someEndpoint", "http://localhost:5000", "production", "app-1"}
+	someOtherCheck := Check{"someOtherEndpoint", "http://localhost:5000", "production", "app-2"}
+	someThirdCheck := Check{"someThirdEndpoint", "http://localhost:5000", "production", "app-3"}
 	checks := []Check{someCheck, someOtherCheck, someThirdCheck}
 
 	checkCount := len(checks)
@@ -24,9 +24,12 @@ func main() {
 		timestamp := time.Now().Unix()
 		for i := 0; i < checkCount; i++ {
 			result := <-resultsChannel
+			// hvordan f... er det mulig å få det samme to ganger da?
+			fmt.Println("picked out a result from channel", (*result.check).application)
 			check := *result.check
-			fmt.Println("Got result", result.status)
-			payloadElements = append(payloadElements, fmt.Sprintf("checker,environment=%s,application=%s,endpoint=%s value=%d %d", check.environment, check.application, check.endpoint, result.status, timestamp))
+			elem := fmt.Sprintf("checker,environment=%s,application=%s,endpoint=%s value=%d %d", check.environment, check.application, check.endpoint, result.status, timestamp)
+			fmt.Println("created elem", elem)
+			payloadElements = append(payloadElements, elem)
 		}
 		done <- true
 	}()
@@ -41,11 +44,11 @@ func main() {
 	return
 }
 
-//func transformResults()
-
-func check(checks <-chan Check, results chan <- Result) {
+func check(checks <-chan Check, results chan<- Result) {
 	for check := range checks {
 		resp, err := http.Get(check.endpoint)
+
+		fmt.Println("checking", check.application)
 
 		var resultCode int
 
@@ -58,7 +61,7 @@ func check(checks <-chan Check, results chan <- Result) {
 		}
 
 		result := Result{resultCode, &check}
-		fmt.Println("done checking, posting result to channel")
+		fmt.Println("done checking, posting result to channel", check.application)
 		results <- result
 	}
 }
