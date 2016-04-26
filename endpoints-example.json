@@ -1,0 +1,13 @@
+[
+  {
+    "endpoint": "https://myapp/isalive",
+    "environment": "production",
+    "application": "myapp"
+  },
+  {
+    "endpoint": "https://myapp/isalive",
+    "environment": "staging",
+    "application": "myapp"
+  }
+]
+
