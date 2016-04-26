@@ -16,6 +16,7 @@ var (
 	influxdbEndpoint = flag.String("influxdbEndpoint", "", "")
 	endpointsFile = flag.String("file", "", "")
 	interval = flag.Int("interval", 0, "")
+	debug = flag.Bool("debug", false, "")
 )
 
 var usage = `Usage: checker [options...]
@@ -25,6 +26,7 @@ Options:
   -influxdbEndpoint	Which InfluxDB endpoint to post the results to
   -file  		JSON-file containing your endpoints
   -interval      	At what interval you want the checks to be performed (run once if omitted)
+  -debug		Prints payload
 `
 
 func main() {
@@ -42,6 +44,7 @@ func main() {
 		data, err := ioutil.ReadFile(*endpointsFile)
 
 		if (err != nil) {
+			log.Fatal("unable to read file, ", *endpointsFile)
 			panic(err)
 		}
 
@@ -88,6 +91,11 @@ func main() {
 }
 
 func postToInfluxDB(payload string) {
+
+	if (*debug){
+		log.Printf("Posting the following payload to InfluxDB (%s)\n%s", *influxdbEndpoint, payload)
+	}
+
 	_, err := http.Post(*influxdbEndpoint, "text/plain", strings.NewReader(payload))
 	if (err != nil) {
 		panic(err)
