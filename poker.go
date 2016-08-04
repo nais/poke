@@ -10,6 +10,7 @@ import (
 	"log"
 	"flag"
 	"os"
+	"strconv"
 )
 
 var (
@@ -19,13 +20,13 @@ var (
 	debug = flag.Bool("debug", false, "")
 )
 
-var usage = `Usage: checker [options...]
+var usage = `Usage: poker [options...]
 
 Options:
 
   -influxdbEndpoint	Which InfluxDB endpoint to post the results to
   -file  		JSON-file containing your endpoints
-  -interval      	At what interval you want the checks to be performed (run once if omitted)
+  -interval      	At what interval you want the pokes to be performed (run once if omitted)
   -debug		Prints payload
 `
 
@@ -48,39 +49,39 @@ func main() {
 			panic(err)
 		}
 
-		checks := []Check{}
+		pokes := []Poke{}
 
-		err = json.Unmarshal(data, &checks)
+		err = json.Unmarshal(data, &pokes)
 
-		checksChannel := make(chan Check)
+		pokesChannel := make(chan Poke)
 		resultsChannel := make(chan Result)
 		done := make(chan bool)
 		payloadElements := []string{}
 
-		go check(checksChannel, resultsChannel)
+		go poke(pokesChannel, resultsChannel)
 		go func() {
 			timestamp := time.Now().Unix()
 
 			for result := range resultsChannel {
-				check := result.check
-				elem := fmt.Sprintf("checker,environment=%s,application=%s,endpoint=%s value=%d %d", check.Environment, check.Application, check.Endpoint, result.status, timestamp)
+				poke := result.poke
+				elem := fmt.Sprintf("pokes,environment=%s,application=%s,endpoint=%s value=%d %d", poke.Environment, poke.Application, poke.Endpoint, result.status, timestamp)
 				payloadElements = append(payloadElements, elem)
 			}
 
 			done <- true
 		}()
 
-		for _, check := range checks {
-			checksChannel <- check
+		for _, poke := range pokes {
+			pokesChannel <- poke
 		}
 
-		close(checksChannel)
+		close(pokesChannel)
 
 		<-done
 
 		postToInfluxDB(strings.Join(payloadElements, "\n"))
 
-		log.Printf("Successfully posted %d check results to InfluxDB", len(checks))
+		log.Printf("Successfully posted %d pokes to InfluxDB", len(pokes))
 
 		if (*interval != 0){
 			time.Sleep(time.Duration(*interval) * time.Second)
@@ -91,20 +92,34 @@ func main() {
 }
 
 func postToInfluxDB(payload string) {
-
 	if (*debug){
 		log.Printf("Posting the following payload to InfluxDB (%s)\n%s", *influxdbEndpoint, payload)
 	}
 
-	_, err := http.Post(*influxdbEndpoint, "text/plain", strings.NewReader(payload))
+	resp, err := http.Post(*influxdbEndpoint, "text/plain", strings.NewReader(payload))
+
 	if (err != nil) {
 		panic(err)
 	}
+
+	if (resp.StatusCode != 204){
+		panic("Unable to post pokes to InfluxDB: " + toString(resp))
+	}
 }
 
-func check(checks <-chan Check, results chan <- Result) {
-	for check := range checks {
-		resp, err := http.Get(check.Endpoint)
+func toString(resp *http.Response) string {
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+	return "Response from " + resp.Request.URL.String() + ": " + string(body) + " (HTTP " + strconv.Itoa(resp.StatusCode) + ")"
+}
+
+func poke(pokes <-chan Poke, results chan <- Result) {
+	for poke := range pokes {
+		resp, err := http.Get(poke.Endpoint)
+
+		if (*debug){
+			fmt.Println(toString(resp))
+		}
 
 		var resultCode int
 
@@ -116,13 +131,14 @@ func check(checks <-chan Check, results chan <- Result) {
 			resultCode = Error
 		}
 
-		result := Result{resultCode, check}
+		result := Result{resultCode, poke}
+
 		results <- result
 	}
 	close(results)
 }
 
-type Check struct {
+type Poke struct {
 	Name        string `json:"name"`
 	Endpoint    string `json:"endpoint"`
 	Environment string `json:"environment"`
@@ -131,7 +147,7 @@ type Check struct {
 
 type Result struct {
 	status int
-	check  Check
+	poke   Poke
 }
 
 const (
