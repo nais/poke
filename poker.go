@@ -108,16 +108,21 @@ func postToInfluxDB(payload string) {
 }
 
 func toString(resp *http.Response) string {
-	defer resp.Body.Close()
-	body, _ := ioutil.ReadAll(resp.Body)
-	return "Response from " + resp.Request.URL.String() + ": " + string(body) + " (HTTP " + strconv.Itoa(resp.StatusCode) + ")"
+	if (resp != nil){
+		defer resp.Body.Close()
+		body, _ := ioutil.ReadAll(resp.Body)
+		return "Response from " + resp.Request.URL.String() + ": " + string(body) + " (HTTP " + strconv.Itoa(resp.StatusCode) + ")"
+	} else {
+		return "FAAAAAAAEN ELLING!!!!!!!"
+	}
 }
 
 func poke(pokes <-chan Poke, results chan <- Result) {
 	for poke := range pokes {
 		resp, err := http.Get(poke.Endpoint)
 
-		if (*debug){
+		// sjekk error?
+		if (*debug && resp != nil){
 			fmt.Println(toString(resp))
 		}
 
