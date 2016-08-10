@@ -49,6 +49,10 @@ func main() {
 			panic(err)
 		}
 
+		if !*debug {
+			log.SetOutput(ioutil.Discard)
+		}
+
 		pokes := []Poke{}
 
 		err = json.Unmarshal(data, &pokes)
@@ -83,7 +87,7 @@ func main() {
 
 		log.Printf("Successfully posted %d pokes to InfluxDB", len(pokes))
 
-		if (*interval != 0){
+		if (*interval != 0) {
 			time.Sleep(time.Duration(*interval) * time.Second)
 		} else {
 			return
@@ -92,9 +96,7 @@ func main() {
 }
 
 func postToInfluxDB(payload string) {
-	if (*debug){
-		log.Printf("Posting the following payload to InfluxDB (%s)\n%s", *influxdbEndpoint, payload)
-	}
+	log.Printf("Posting the following payload to InfluxDB (%s)\n%s", *influxdbEndpoint, payload)
 
 	resp, err := http.Post(*influxdbEndpoint, "text/plain", strings.NewReader(payload))
 
@@ -102,38 +104,33 @@ func postToInfluxDB(payload string) {
 		panic(err)
 	}
 
-	if (resp.StatusCode != 204){
+	if (resp.StatusCode != 204) {
 		panic("Unable to post pokes to InfluxDB: " + toString(resp))
 	}
 }
 
 func toString(resp *http.Response) string {
-	if (resp != nil){
-		defer resp.Body.Close()
-		body, _ := ioutil.ReadAll(resp.Body)
-		return "Response from " + resp.Request.URL.String() + ": " + string(body) + " (HTTP " + strconv.Itoa(resp.StatusCode) + ")"
-	} else {
-		return "FAAAAAAAEN ELLING!!!!!!!"
-	}
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+	return "Response from " + resp.Request.URL.String() + ": " + string(body) + " (HTTP " + strconv.Itoa(resp.StatusCode) + ")"
 }
 
 func poke(pokes <-chan Poke, results chan <- Result) {
 	for poke := range pokes {
 		resp, err := http.Get(poke.Endpoint)
 
-		// sjekk error?
-		if (*debug && resp != nil){
-			fmt.Println(toString(resp))
-		}
-
 		var resultCode int
-
 		if err != nil {
 			resultCode = Unknown
-		} else if resp.StatusCode == 200 {
-			resultCode = Ok
+			log.Println(err)
 		} else {
-			resultCode = Error
+			log.Println(toString(resp))
+
+			if resp.StatusCode == 200 {
+				resultCode = Ok
+			} else {
+				resultCode = Error
+			}
 		}
 
 		result := Result{resultCode, poke}
