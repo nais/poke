@@ -68,7 +68,7 @@ func main() {
 
 			for result := range resultsChannel {
 				poke := result.poke
-				elem := fmt.Sprintf("pokes,environment=%s,application=%s,endpoint=%s value=%d %d", poke.Environment, poke.Application, poke.Endpoint, result.status, timestamp)
+				elem := fmt.Sprintf("pokes,environment=%s,application=%s,endpoint=%s value=%d %d", poke.Environment, poke.Application, escapeSpecialChars(poke.Endpoint), result.status, timestamp)
 				payloadElements = append(payloadElements, elem)
 			}
 
@@ -93,6 +93,11 @@ func main() {
 			return
 		}
 	}
+}
+
+func escapeSpecialChars(string string) string {
+	equallessString := strings.Replace(string, "=", "\\=", -1)
+	return strings.Replace(equallessString, ",", "\\,", -1)
 }
 
 func postToInfluxDB(payload string) {
