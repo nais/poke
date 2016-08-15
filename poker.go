@@ -95,11 +95,6 @@ func main() {
 	}
 }
 
-func escapeSpecialChars(string string) string {
-	equallessString := strings.Replace(string, "=", "\\=", -1)
-	return strings.Replace(equallessString, ",", "\\,", -1)
-}
-
 func postToInfluxDB(payload string) {
 	log.Printf("Posting the following payload to InfluxDB (%s)\n%s", *influxdbEndpoint, payload)
 
@@ -139,6 +134,11 @@ func poke(pokes <-chan Poke, results chan <- Result) {
 		results <- result
 	}
 	close(results)
+}
+
+func escapeSpecialChars(string string) string {
+	equallessString := strings.Replace(string, "=", "\\=", -1)
+	return strings.Replace(equallessString, ",", "\\,", -1)
 }
 
 type Poke struct {
