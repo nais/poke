@@ -124,17 +124,13 @@ func poke(pokes <-chan Poke, results chan <- Result) {
 	for poke := range pokes {
 		resp, err := http.Get(poke.Endpoint)
 
-		var resultCode int
+		var resultCode int = Error
 		if err != nil {
-			resultCode = Unknown
 			log.Println(err)
 		} else {
 			log.Println(toString(resp))
-
 			if resp.StatusCode == 200 {
 				resultCode = Ok
-			} else {
-				resultCode = Error
 			}
 		}
 
@@ -160,7 +156,6 @@ type Result struct {
 const (
 	Ok = 0
 	Error = 1
-	Unknown = -1
 )
 
 func usageAndExit(msg string) {
