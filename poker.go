@@ -11,6 +11,7 @@ import (
 	"flag"
 	"os"
 	"strconv"
+	"crypto/tls"
 )
 
 var (
@@ -87,7 +88,7 @@ func main() {
 
 		log.Printf("Successfully posted %d pokes to InfluxDB", len(pokes))
 
-		if (*interval != 0) {
+		if *interval != 0 {
 			time.Sleep(time.Duration(*interval) * time.Second)
 		} else {
 			return
@@ -100,11 +101,11 @@ func postToInfluxDB(payload string) {
 
 	resp, err := http.Post(*influxdbEndpoint, "text/plain", strings.NewReader(payload))
 
-	if (err != nil) {
+	if err != nil {
 		panic(err)
 	}
 
-	if (resp.StatusCode != 204) {
+	if resp.StatusCode != 204 {
 		panic("Unable to post pokes to InfluxDB: " + toString(resp))
 	}
 }
@@ -117,9 +118,10 @@ func toString(resp *http.Response) string {
 
 func poke(pokes <-chan Poke, results chan <- Result) {
 	for poke := range pokes {
+		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		resp, err := http.Get(poke.Endpoint)
 
-		var resultCode int = Error
+		var resultCode = Error
 		if err != nil {
 			log.Println(err)
 		} else {
