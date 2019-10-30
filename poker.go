@@ -1,24 +1,23 @@
 package main
 
 import (
+	"crypto/tls"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
 	"strings"
 	"time"
-	"fmt"
-	"net/http"
-	"io/ioutil"
-	"encoding/json"
-	"log"
-	"flag"
-	"os"
-	"strconv"
-	"crypto/tls"
 )
 
 var (
 	influxdbEndpoint = flag.String("influxdbEndpoint", "", "")
-	endpointsFile = flag.String("file", "", "")
-	interval = flag.Int("interval", 0, "")
-	debug = flag.Bool("debug", false, "")
+	endpointsFile    = flag.String("file", "", "")
+	interval         = flag.Int("interval", 0, "")
+	debug            = flag.Bool("debug", false, "")
 )
 
 var usage = `Usage: poker [options...]
@@ -45,7 +44,7 @@ func main() {
 
 		data, err := ioutil.ReadFile(*endpointsFile)
 
-		if (err != nil) {
+		if err != nil {
 			log.Fatal("unable to read file, ", *endpointsFile)
 			panic(err)
 		}
@@ -54,39 +53,42 @@ func main() {
 			log.SetOutput(ioutil.Discard)
 		}
 
-		pokes := []Poke{}
+		var pokes []Poke
 
 		err = json.Unmarshal(data, &pokes)
 
-		pokesChannel := make(chan Poke)
-		resultsChannel := make(chan Result)
-		done := make(chan bool)
-		payloadElements := []string{}
+		timestamp := time.Now().Unix()
 
-		go poke(pokesChannel, resultsChannel)
-		go func() {
-			timestamp := time.Now().Unix()
-
-			for result := range resultsChannel {
-				poke := result.poke
-				elem := fmt.Sprintf("pokes,environment=%s,application=%s,endpoint=%s value=%d %d", poke.Environment, poke.Application, escapeSpecialChars(poke.Endpoint), result.status, timestamp)
-				payloadElements = append(payloadElements, elem)
-			}
-
-			done <- true
-		}()
+		var results []Result
 
 		for _, poke := range pokes {
-			pokesChannel <- poke
+			http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+			resp, err := http.Get(poke.Endpoint)
+
+			var resultCode = Error
+			if err != nil {
+				log.Println(err)
+			} else {
+				if resp.StatusCode == 200 {
+					resultCode = Ok
+				}
+			}
+
+			results = append(results, Result{resultCode, poke})
 		}
 
-		close(pokesChannel)
+		var payloadElements []string
+		for _, result := range results {
+			poke := result.poke
+			elem := fmt.Sprintf("pokes,environment=%s,application=%s,endpoint=%s value=%d %d", poke.Environment, poke.Application, escapeSpecialChars(poke.Endpoint), result.status, timestamp)
+			payloadElements = append(payloadElements, elem)
+		}
 
-		<-done
-
-		postToInfluxDB(strings.Join(payloadElements, "\n"))
-
-		log.Printf("Successfully posted %d pokes to InfluxDB", len(pokes))
+		if err := postToInfluxDB(strings.Join(payloadElements, "\n")); err != nil {
+			log.Println(err)
+		} else {
+			log.Printf("Successfully posted %d pokes to InfluxDB", len(pokes))
+		}
 
 		if *interval != 0 {
 			time.Sleep(time.Duration(*interval) * time.Second)
@@ -96,46 +98,22 @@ func main() {
 	}
 }
 
-func postToInfluxDB(payload string) {
+func postToInfluxDB(payload string) error {
 	log.Printf("Posting the following payload to InfluxDB (%s)\n%s", *influxdbEndpoint, payload)
 
 	resp, err := http.Post(*influxdbEndpoint, "text/plain", strings.NewReader(payload))
 
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("unable to post pokes to InfluxDB: %s", err)
 	}
 
-	if resp.StatusCode != 204 {
-		panic("Unable to post pokes to InfluxDB: " + toString(resp))
+	if resp != nil && resp.StatusCode != 204 {
+		body, _ := ioutil.ReadAll(resp.Body)
+		defer resp.Body.Close()
+		return fmt.Errorf("unable to post pokes to InfluxDB, got HTTP status code %d and body: %s", resp.StatusCode, string(body))
 	}
-}
 
-func toString(resp *http.Response) string {
-	defer resp.Body.Close()
-	body, _ := ioutil.ReadAll(resp.Body)
-	return "Response from " + resp.Request.URL.String() + ": " + string(body) + " (HTTP " + strconv.Itoa(resp.StatusCode) + ")"
-}
-
-func poke(pokes <-chan Poke, results chan <- Result) {
-	for poke := range pokes {
-		http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-		resp, err := http.Get(poke.Endpoint)
-
-		var resultCode = Error
-		if err != nil {
-			log.Println(err)
-		} else {
-			log.Println(toString(resp))
-			if resp.StatusCode == 200 {
-				resultCode = Ok
-			}
-		}
-
-		result := Result{resultCode, poke}
-
-		results <- result
-	}
-	close(results)
+	return nil
 }
 
 func escapeSpecialChars(string string) string {
@@ -156,7 +134,7 @@ type Result struct {
 }
 
 const (
-	Ok = 0
+	Ok    = 0
 	Error = 1
 )
 
