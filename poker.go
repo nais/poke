@@ -13,14 +13,17 @@ import (
 	"time"
 )
 
+const (
+	Ok    = 0
+	Error = 1
+)
+
 var (
 	influxdbEndpoint = flag.String("influxdbEndpoint", "", "")
 	endpointsFile    = flag.String("file", "", "")
 	interval         = flag.Int("interval", 0, "")
 	debug            = flag.Bool("debug", false, "")
-)
-
-var usage = `Usage: poker [options...]
+	usage            = `Usage: poker [options...]
 
 Options:
 
@@ -29,38 +32,54 @@ Options:
   -interval      	At what interval you want the pokes to be performed (run once if omitted)
   -debug		Prints payload
 `
+)
+
+type Poke struct {
+	Name        string `json:"name"`
+	Endpoint    string `json:"endpoint"`
+	Environment string `json:"environment"`
+	Application string `json:"application"`
+}
+
+type Result struct {
+	status int
+	poke   Poke
+}
 
 func main() {
+	flag.Parse()
+
+	flag.Usage = func() {
+		fmt.Fprint(os.Stderr, usage)
+	}
+
+	if flag.NFlag() < 2 {
+		usageAndExit("You did not supply enough arguments (everything must be set)")
+	}
+
+	data, err := ioutil.ReadFile(*endpointsFile)
+
+	if err != nil {
+		log.Fatal("unable to read file, ", *endpointsFile)
+		panic(err)
+	}
+
+	if !*debug {
+		log.SetOutput(ioutil.Discard)
+	}
+
+	var pokes []Poke
+
+	if err := json.Unmarshal(data, &pokes); err != nil {
+		usageAndExit(fmt.Sprintf("unable to unmarshal endpoint config: %s", err))
+	}
+
 	for {
-		flag.Parse()
-
-		flag.Usage = func() {
-			fmt.Fprint(os.Stderr, usage)
-		}
-
-		if flag.NFlag() < 2 {
-			usageAndExit("You did not supply enough arguments (everything must be set)")
-		}
-
-		data, err := ioutil.ReadFile(*endpointsFile)
-
-		if err != nil {
-			log.Fatal("unable to read file, ", *endpointsFile)
-			panic(err)
-		}
-
-		if !*debug {
-			log.SetOutput(ioutil.Discard)
-		}
-
-		var pokes []Poke
-
-		err = json.Unmarshal(data, &pokes)
-
 		timestamp := time.Now().Unix()
 
 		var results []Result
 
+		var payloadElements []string
 		for _, poke := range pokes {
 			http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 			resp, err := http.Get(poke.Endpoint)
@@ -74,14 +93,9 @@ func main() {
 				}
 			}
 
-			results = append(results, Result{resultCode, poke})
-		}
-
-		var payloadElements []string
-		for _, result := range results {
-			poke := result.poke
-			elem := fmt.Sprintf("pokes,environment=%s,application=%s,endpoint=%s value=%d %d", poke.Environment, poke.Application, escapeSpecialChars(poke.Endpoint), result.status, timestamp)
+			elem := fmt.Sprintf("pokes,environment=%s,application=%s,endpoint=%s value=%d %d", poke.Environment, poke.Application, escapeSpecialChars(poke.Endpoint), resultCode, timestamp)
 			payloadElements = append(payloadElements, elem)
+			results = append(results, Result{resultCode, poke})
 		}
 
 		if err := postToInfluxDB(strings.Join(payloadElements, "\n")); err != nil {
@@ -120,23 +134,6 @@ func escapeSpecialChars(string string) string {
 	equallessString := strings.Replace(string, "=", "\\=", -1)
 	return strings.Replace(equallessString, ",", "\\,", -1)
 }
-
-type Poke struct {
-	Name        string `json:"name"`
-	Endpoint    string `json:"endpoint"`
-	Environment string `json:"environment"`
-	Application string `json:"application"`
-}
-
-type Result struct {
-	status int
-	poke   Poke
-}
-
-const (
-	Ok    = 0
-	Error = 1
-)
 
 func usageAndExit(msg string) {
 	if msg != "" {
