@@ -20,6 +20,7 @@ const (
 var (
 	influxdbEndpoint string
 	endpointsFile    string
+	measurementName  string
 	interval         int
 )
 
@@ -36,8 +37,9 @@ type Result struct {
 }
 
 func init() {
-	flag.StringVar(&influxdbEndpoint, "influxdbEndpoint", "", "Which InfluxDB endpoint to post the results to")
-	flag.StringVar(&endpointsFile, "file", "", "JSON-file containing your endpoints")
+	flag.StringVar(&influxdbEndpoint, "influxdbEndpoint", "", "Which InfluxDB endpoint to post the results to (required)")
+	flag.StringVar(&endpointsFile, "file", "", "JSON-file containing your endpoints (required)")
+	flag.StringVar(&measurementName, "measurement-name", "pokes", "Name of InfluxDB measurement to write data to")
 	flag.IntVar(&interval, "interval", 0, "At what interval you want the pokes to be performed (run once if omitted)")
 	flag.Parse()
 }
@@ -45,9 +47,9 @@ func init() {
 func main() {
 	flag.Parse()
 
-	if flag.NFlag() < 2 {
+	if len(influxdbEndpoint) == 0 || len(endpointsFile) == 0 {
 		flag.Usage()
-		log.Fatal("You did not supply enough arguments (everything must be set)")
+		log.Fatal("missing required configuration")
 	}
 
 	data, err := ioutil.ReadFile(endpointsFile)
@@ -80,11 +82,11 @@ func main() {
 				if resp.StatusCode == 200 {
 					resultCode = Ok
 				} else {
-				    fmt.Printf("got an unsuccessful statuscode %d for endpoint %s\n", resp.StatusCode, poke.Endpoint)
+					fmt.Printf("got an unsuccessful statuscode %d for endpoint %s\n", resp.StatusCode, poke.Endpoint)
 				}
 			}
 
-			elem := fmt.Sprintf("pokes,environment=%s,application=%s,endpoint=%s value=%d %d", poke.Environment, poke.Application, escapeSpecialChars(poke.Endpoint), resultCode, timestamp)
+			elem := fmt.Sprintf("%s,environment=%s,application=%s,endpoint=%s value=%d %d", measurementName, poke.Environment, poke.Application, escapeSpecialChars(poke.Endpoint), resultCode, timestamp)
 			payloadElements = append(payloadElements, elem)
 			results = append(results, Result{resultCode, poke})
 		}
