@@ -38,7 +38,7 @@ type Result struct {
 
 func init() {
 	flag.StringVar(&influxdbEndpoint, "influxdbEndpoint", "", "Which InfluxDB endpoint to post the results to (required)")
-	flag.StringVar(&endpointsFile, "file", "", "JSON-file containing your endpoints (required)")
+	flag.StringVar(&endpointsFile, "endpoints", "", "JSON-file containing your endpoints (required)")
 	flag.StringVar(&measurementName, "measurement-name", "pokes", "Name of InfluxDB measurement to write data to")
 	flag.IntVar(&interval, "interval", 0, "At what interval you want the pokes to be performed (run once if omitted)")
 	flag.Parse()
@@ -64,7 +64,11 @@ func main() {
 		log.Fatalf(fmt.Sprintf("unable to unmarshal endpoint config: %s", err))
 	}
 
-	http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	client := http.Client{
+		Timeout: time.Second * 2,
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}}
 
 	for {
 		timestamp := time.Now().Unix()
@@ -74,8 +78,7 @@ func main() {
 		var payloadElements []string
 		for _, poke := range pokes {
 			var resultCode = Error
-			resp, err := http.Get(poke.Endpoint)
-
+			resp, err := client.Get(poke.Endpoint)
 			if err != nil {
 				fmt.Println("error: ", err)
 			} else {
