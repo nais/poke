@@ -25,10 +25,9 @@ var (
 )
 
 type Poke struct {
-	Name        string `json:"name"`
-	Endpoint    string `json:"endpoint"`
-	Environment string `json:"environment"`
-	Application string `json:"application"`
+	Name     string            `json:"name"`
+	Endpoint string            `json:"endpoint"`
+	Tags     map[string]string `json:"tags"`
 }
 
 type Result struct {
@@ -52,16 +51,10 @@ func main() {
 		log.Fatal("missing required configuration")
 	}
 
-	data, err := ioutil.ReadFile(endpointsFile)
+	pokes, err := pokes(endpointsFile)
 
 	if err != nil {
-		log.Fatalf("unable to read file: %s: %s", endpointsFile, err)
-	}
-
-	var pokes []Poke
-
-	if err := json.Unmarshal(data, &pokes); err != nil {
-		log.Fatalf(fmt.Sprintf("unable to unmarshal endpoint config: %s", err))
+		log.Fatalf("unable to extract endpoints to poke from file: %s: %s", endpointsFile, err)
 	}
 
 	client := http.Client{
@@ -77,27 +70,27 @@ func main() {
 
 		var payloadElements []string
 		for _, poke := range pokes {
-			var resultCode = Error
+			resultCode := Error
 			resp, err := client.Get(poke.Endpoint)
 			if err != nil {
-				fmt.Println("error: ", err)
+				log.Printf("error: unable to perform request to endpoint %s: %s", poke.Endpoint, err)
 			} else {
 				if resp.StatusCode == 200 {
 					resultCode = Ok
 				} else {
-					fmt.Printf("got an unsuccessful statuscode %d for endpoint %s\n", resp.StatusCode, poke.Endpoint)
+					log.Printf("got an unsuccessful statuscode %d for endpoint %s\n", resp.StatusCode, poke.Endpoint)
 				}
 			}
 
-			elem := fmt.Sprintf("%s,environment=%s,application=%s,endpoint=%s value=%d %d", measurementName, poke.Environment, poke.Application, escapeSpecialChars(poke.Endpoint), resultCode, timestamp)
+			elem := fmt.Sprintf("%s,%s value=%d %d", measurementName, tags(poke), resultCode, timestamp)
 			payloadElements = append(payloadElements, elem)
 			results = append(results, Result{resultCode, poke})
 		}
 
 		if err := postToInfluxDB(strings.Join(payloadElements, "\n")); err != nil {
-			fmt.Println(err)
+			log.Print(err)
 		} else {
-			fmt.Printf("Successfully posted %d pokes to InfluxDB\n", len(pokes))
+			log.Printf("Successfully posted %d pokes to InfluxDB\n", len(pokes))
 		}
 
 		if interval != 0 {
@@ -106,6 +99,30 @@ func main() {
 			return
 		}
 	}
+}
+
+func tags(poke Poke) string {
+	pairs := []string{fmt.Sprintf("endpoint=%s", escapeSpecialChars(poke.Endpoint))}
+
+	for key, value := range poke.Tags {
+		pairs = append(pairs, fmt.Sprintf("%s=%s", escapeSpecialChars(key), escapeSpecialChars(value)))
+	}
+
+	return strings.Join(pairs, ",")
+}
+
+func pokes(endpointsFile string) (pokes []Poke, err error) {
+	data, err := ioutil.ReadFile(endpointsFile)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to read endpoints file: %s: %s", endpointsFile, err)
+	}
+
+	if err := json.Unmarshal(data, &pokes); err != nil {
+		return nil, fmt.Errorf("unable to unmarshal endpoint config: %s", err)
+	}
+
+	return
 }
 
 func postToInfluxDB(payload string) error {
