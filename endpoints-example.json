@@ -1,13 +1,17 @@
 [
   {
     "endpoint": "https://myapp/isalive",
-    "environment": "production",
-    "application": "myapp"
+    "tags": { 
+      "environment": "production",
+      "application": "myapp"
+    }
   },
   {
-    "endpoint": "https://myapp/isalive",
-    "environment": "staging",
-    "application": "myapp"
+    "endpoint": "https://someapp/isalive",
+    "tags": { 
+      "environment": "staging",
+      "application": "someapp"
+    }
   }
 ]
 
