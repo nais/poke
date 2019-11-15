@@ -93,11 +93,12 @@ func main() {
 			log.Printf("Successfully posted %d pokes to InfluxDB\n", len(pokes))
 		}
 
-		if interval != 0 {
-			time.Sleep(time.Duration(interval) * time.Second)
-		} else {
+		// if no interval is provided, we only run once
+		if interval == 0 {
 			return
 		}
+
+		time.Sleep(time.Duration(interval) * time.Second)
 	}
 }
 
