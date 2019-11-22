@@ -21,6 +21,7 @@ var (
 	influxdbEndpoint string
 	endpointsFile    string
 	measurementName  string
+	timeout          int
 	interval         int
 )
 
@@ -38,6 +39,7 @@ func init() {
 	flag.StringVar(&influxdbEndpoint, "influxdbEndpoint", "", "Which InfluxDB endpoint to post the results to (required)")
 	flag.StringVar(&endpointsFile, "endpoints", "", "JSON-file containing your endpoints (required)")
 	flag.StringVar(&measurementName, "measurement-name", "pokes", "Name of InfluxDB measurement to write data to")
+	flag.IntVar(&timeout, "timeout", 2, "default request timeout (seconds)")
 	flag.IntVar(&interval, "interval", 0, "At what interval you want the pokes to be performed (run once if omitted)")
 	flag.Parse()
 }
@@ -57,7 +59,7 @@ func main() {
 	}
 
 	client := http.Client{
-		Timeout: time.Second * 2,
+		Timeout: time.Second * time.Duration(timeout),
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}}
