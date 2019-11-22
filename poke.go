@@ -25,7 +25,6 @@ var (
 )
 
 type Poke struct {
-	Name     string            `json:"name"`
 	Endpoint string            `json:"endpoint"`
 	Tags     map[string]string `json:"tags"`
 }
