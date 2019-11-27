@@ -72,18 +72,27 @@ func main() {
 		var payloadElements []string
 		for _, poke := range pokes {
 			resultCode := Error
+			errorMsg := ""
 			resp, err := client.Get(poke.Endpoint)
 			if err != nil {
+				errorMsg = fmt.Sprintf("unable to perform request: %s", err)
 				log.Printf("error: unable to perform request to endpoint %s: %s", poke.Endpoint, err)
 			} else {
 				if resp.StatusCode == 200 {
 					resultCode = Ok
 				} else {
 					log.Printf("got an unsuccessful statuscode %d for endpoint %s\n", resp.StatusCode, poke.Endpoint)
+					errorMsg = fmt.Sprintf("got an unsuccessful statuscode: %d", resp.StatusCode)
+					b, err := ioutil.ReadAll(resp.Body)
+					if err != nil {
+						errorMsg += fmt.Sprintf(". Unable to read body: %s", err)
+					} else {
+						errorMsg += fmt.Sprintf(". Response body: %s", string(b))
+					}
 				}
 			}
 
-			elem := fmt.Sprintf("%s,%s value=%d %d", measurementName, tags(poke), resultCode, timestamp)
+			elem := fmt.Sprintf("%s,%s value=%d,err=\"%s\" %d", measurementName, tags(poke), resultCode, errorMsg, timestamp)
 			payloadElements = append(payloadElements, elem)
 			results = append(results, Result{resultCode, poke})
 		}
