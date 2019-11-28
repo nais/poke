@@ -88,6 +88,7 @@ func main() {
 						errorMsg += fmt.Sprintf(". Unable to read body: %s", err)
 					} else {
 						errorMsg += fmt.Sprintf(". Response body: %s", string(b))
+						resp.Body.Close()
 					}
 				}
 			}
