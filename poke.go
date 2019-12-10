@@ -21,8 +21,9 @@ var (
 	influxdbEndpoint string
 	endpointsFile    string
 	measurementName  string
-	timeout          int
-	interval         int
+	timeout          int64
+	interval         int64
+	counter          int64
 )
 
 type Poke struct {
@@ -39,8 +40,8 @@ func init() {
 	flag.StringVar(&influxdbEndpoint, "influxdbEndpoint", "", "Which InfluxDB endpoint to post the results to (required)")
 	flag.StringVar(&endpointsFile, "endpoints", "", "JSON-file containing your endpoints (required)")
 	flag.StringVar(&measurementName, "measurement-name", "pokes", "Name of InfluxDB measurement to write data to")
-	flag.IntVar(&timeout, "timeout", 2, "default request timeout (seconds)")
-	flag.IntVar(&interval, "interval", 0, "At what interval you want the pokes to be performed (run once if omitted)")
+	flag.Int64Var(&timeout, "timeout", 2, "default request timeout (seconds)")
+	flag.Int64Var(&interval, "interval", 0, "At what interval you want the pokes to be performed (run once if omitted)")
 	flag.Parse()
 }
 
@@ -88,12 +89,12 @@ func main() {
 						errorMsg += fmt.Sprintf(". Unable to read body: %s", err)
 					} else {
 						errorMsg += fmt.Sprintf(". Response body: %s", string(b))
-						resp.Body.Close()
+						_ = resp.Body.Close()
 					}
 				}
 			}
 
-			elem := fmt.Sprintf("%s,%s value=%d,err=\"%s\" %d", measurementName, tags(poke), resultCode, errorMsg, timestamp)
+			elem := fmt.Sprintf("%s,%s value=%d,counter=%d,err=\"%s\" %d", measurementName, tags(poke), resultCode, counter, errorMsg, timestamp)
 			payloadElements = append(payloadElements, elem)
 			results = append(results, Result{resultCode, poke})
 		}
@@ -109,6 +110,7 @@ func main() {
 			return
 		}
 
+		counter++
 		time.Sleep(time.Duration(interval) * time.Second)
 	}
 }
