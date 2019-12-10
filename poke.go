@@ -74,7 +74,7 @@ func main() {
 		for _, poke := range pokes {
 			resultCode := Error
 			errorMsg := ""
-			resp, err := client.Get(poke.Endpoint)
+			resp, err := client.Get(withCounter(poke.Endpoint))
 			if err != nil {
 				errorMsg = fmt.Sprintf("unable to perform request: %s", err)
 				log.Printf("error: unable to perform request to endpoint %s: %s", poke.Endpoint, err)
@@ -113,6 +113,10 @@ func main() {
 		counter++
 		time.Sleep(time.Duration(interval) * time.Second)
 	}
+}
+
+func withCounter(endpoint string) string {
+	return strings.ReplaceAll(fmt.Sprintf("%s/?counter=%d", endpoint, counter), "//?", "/?")
 }
 
 func tags(poke Poke) string {
