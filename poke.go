@@ -31,12 +31,6 @@ type Poke struct {
 	Tags     map[string]string `json:"tags"`
 }
 
-type Result struct {
-	latency int64
-	status  int
-	poke    Poke
-}
-
 func init() {
 	flag.StringVar(&influxdbEndpoint, "influxdbEndpoint", "", "Which InfluxDB endpoint to post the results to (required)")
 	flag.StringVar(&endpointsFile, "endpoints", "", "JSON-file containing your endpoints (required)")
@@ -69,8 +63,6 @@ func main() {
 	for {
 		timestamp := time.Now().Unix()
 
-		var results []Result
-
 		var payloadElements []string
 		for _, poke := range pokes {
 			resultCode := Error
@@ -98,9 +90,8 @@ func main() {
 				}
 			}
 
-			elem := fmt.Sprintf("%s,%s value=%d,counter=%d,err=\"%s\" %d", measurementName, tags(poke), resultCode, counter, errorMsg, timestamp)
+			elem := fmt.Sprintf("%s,%s elapsed=%d,value=%d,counter=%d,err=\"%s\" %d", measurementName, tags(poke), elapsed, resultCode, counter, errorMsg, timestamp)
 			payloadElements = append(payloadElements, elem)
-			results = append(results, Result{elapsed, resultCode, poke})
 		}
 
 		if err := postToInfluxDB(strings.Join(payloadElements, "\n")); err != nil {
