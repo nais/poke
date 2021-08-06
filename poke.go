@@ -32,8 +32,9 @@ type Poke struct {
 }
 
 type Result struct {
-	status int
-	poke   Poke
+	latency int64
+	status  int
+	poke    Poke
 }
 
 func init() {
@@ -74,11 +75,14 @@ func main() {
 		for _, poke := range pokes {
 			resultCode := Error
 			errorMsg := ""
+			var elapsed int64
+			start := time.Now()
 			resp, err := client.Get(withCounter(poke.Endpoint))
 			if err != nil {
 				errorMsg = fmt.Sprintf("unable to perform request: %s", err)
 				log.Printf("error: unable to perform request to endpoint %s: %s", poke.Endpoint, err)
 			} else {
+				elapsed = time.Since(start).Milliseconds()
 				if resp.StatusCode == 200 {
 					resultCode = Ok
 				} else {
@@ -96,7 +100,7 @@ func main() {
 
 			elem := fmt.Sprintf("%s,%s value=%d,counter=%d,err=\"%s\" %d", measurementName, tags(poke), resultCode, counter, errorMsg, timestamp)
 			payloadElements = append(payloadElements, elem)
-			results = append(results, Result{resultCode, poke})
+			results = append(results, Result{elapsed, resultCode, poke})
 		}
 
 		if err := postToInfluxDB(strings.Join(payloadElements, "\n")); err != nil {
