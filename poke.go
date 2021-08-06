@@ -90,7 +90,7 @@ func main() {
 				}
 			}
 
-			elem := fmt.Sprintf("%s,%s elapsed=%d,value=%d,counter=%d,err=\"%s\" %d", measurementName, tags(poke), elapsed, resultCode, counter, errorMsg, timestamp)
+			elem := fmt.Sprintf("%s,%s latency_ms=%d,value=%d,counter=%d,err=\"%s\" %d", measurementName, tags(poke), elapsed, resultCode, counter, errorMsg, timestamp)
 			payloadElements = append(payloadElements, elem)
 		}
 
